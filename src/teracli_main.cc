@@ -1339,7 +1339,7 @@ int32_t ShowSchemaOp(Client* client, int32_t argc, char** argv, ErrorCode* err) 
         return -1;
     }
 
-    ShowTableSchema(table_meta.schema(), cmd == "showschemax");
+    std::cout << GetTableSchema(table_meta.schema(), cmd == "showschemax") << std::endl;
     return 0;
 }
 

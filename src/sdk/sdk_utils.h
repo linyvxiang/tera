@@ -15,7 +15,7 @@ using std::string;
 
 namespace tera {
 
-void ShowTableSchema(const TableSchema& schema, bool is_x = false);
+std::string GetTableSchema(const TableSchema& schema, bool is_x = false);
 
 void ShowTableMeta(const TableMeta& meta);
 

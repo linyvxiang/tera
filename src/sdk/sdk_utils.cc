@@ -76,7 +76,7 @@ void ReplaceStringInPlace(std::string& subject,
     }
 }
 
-void ShowTableSchema(const TableSchema& s, bool is_x) {
+std::string GetTableSchema(const TableSchema& s, bool is_x) {
     TableSchema schema = s;
     std::stringstream ss;
     std::string str;
@@ -116,8 +116,7 @@ void ShowTableSchema(const TableSchema& s, bool is_x) {
         ss << "\b>\n" << "  (kv mode)\n";
         str = ss.str();
         ReplaceStringInPlace(str, ",\b", "");
-        std::cout << str << std::endl;
-        return;
+        return str;
     }
 
     ss << "\n  " << table_alias << " <";
@@ -194,12 +193,12 @@ void ShowTableSchema(const TableSchema& s, bool is_x) {
     ss << "  }" << std::endl;
     str = ss.str();
     ReplaceStringInPlace(str, ",\b", "");
-    std::cout << str << std::endl;
+    return str;
 }
 
 void ShowTableMeta(const TableMeta& meta) {
     const TableSchema& schema = meta.schema();
-    ShowTableSchema(schema);
+    std::cout << GetTableSchema(schema) << std::endl;
     std::cout << "Snapshot:" << std::endl;
     for (int32_t i = 0; i < meta.snapshot_list_size(); ++i) {
         std::cout << " " << meta.snapshot_list(i) << std::endl;
@@ -210,7 +209,7 @@ void ShowTableMeta(const TableMeta& meta) {
 void ShowTableDescriptor(TableDescriptor& table_desc, bool is_x) {
     TableSchema schema;
     TableDescToSchema(table_desc, &schema);
-    ShowTableSchema(schema, is_x);
+    std::cout << GetTableSchema(schema, is_x) << std::endl;;
 }
 
 void TableDescToSchema(const TableDescriptor& desc, TableSchema* schema) {
