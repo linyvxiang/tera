@@ -1,6 +1,7 @@
 package tera;
 
 message DumpRecord {
+    optional string rowname = 1;
     optional string columnfamily = 2;
     optional string qualifier = 3;
     optional uint64 timestamp = 4;
