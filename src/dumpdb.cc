@@ -15,6 +15,8 @@
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 
+#include "bfs.h"
+
 DECLARE_string(flagfile);
 DECLARE_string(tera_zk_addr_list);
 DECLARE_string(tera_zk_root_path);
@@ -56,12 +58,31 @@ int main(int argc, char* argv[])
         if (table_meta.schema().kv_only()) {
             schema_str.resize(schema_str.size() - 12);
         }
-        mkdir("./dump_data", 0777);
-        mkdir(std::string("./dump_data/" + tablename).c_str(), 0777);
-        std::string prefix = "./dump_data/" + tablename + "/";
-        std::ofstream  schema_s(std::string(prefix + "schema").c_str());
-        schema_s << schema_str;
-        schema_s.close();
+        bfs::FS* fs = NULL;
+        if (!bfs::FS::OpenFileSystem("Porsche:8828", &fs)) {
+            std::cout << "Open filesystem fail" << std::endl;
+            return -1;
+        }
+        if (!fs->CreateDirectory(std::string("/dump_data/" + tablename + "/").c_str())) {
+            std::cout << "Create dir fail" << std::endl;
+            return -1;
+        }
+        bfs::File* schema_file;
+        if (!fs->OpenFile(std::string("/dump_data/" + tablename + "/schema").c_str(),
+                    O_WRONLY | O_TRUNC, &schema_file)) {
+            std::cout << "Open schema file fail" << std::endl;
+            return -1;
+        }
+        int32_t write_bytes = schema_file->Write(schema_str.c_str(), schema_str.size());
+        if (write_bytes != (int32_t)schema_str.size()) {
+            std::cout << "Write schema file fail" << std::endl;
+            return -1;
+        }
+        if (!fs->CloseFile(schema_file)) {
+            std::cout << "Close schema file error" << std::endl;
+            return -1;
+        }
+        delete schema_file;
 
         Table* table = NULL;
         if ((table = client->OpenTable(tablename, &error_code)) == NULL) {
@@ -81,12 +102,12 @@ int main(int argc, char* argv[])
             std::cout << "Scan src table error" << std::endl;
             return -1;
         }
-        std::fstream data_s(std::string(prefix + "data").c_str(),
-                std::ios::out | std::ios::trunc | std::ios::binary);
-        google::protobuf::io::ZeroCopyOutputStream *raw_out =
-            new google::protobuf::io::OstreamOutputStream(&data_s);
-        google::protobuf::io::CodedOutputStream *coded_out =
-            new google::protobuf::io::CodedOutputStream(raw_out);
+        bfs::File* data_file;
+        if (!fs->OpenFile(std::string("/dump_data/" + tablename + "/data").c_str(),
+                    O_WRONLY | O_TRUNC, &data_file)) {
+            std::cout << "Open data file fail" << std::endl;
+            return -1;
+        }
         while (!result_stream->Done()) {
             /*
             std::cout << result_stream->RowName() << ":"
@@ -106,63 +127,91 @@ int main(int argc, char* argv[])
             record.set_value(result_stream->Value());
             std::string infobuf;
             record.SerializeToString(&infobuf);
-            coded_out->WriteVarint32(infobuf.size());
-            coded_out->WriteRaw(infobuf.data(), infobuf.size());
+            int32_t buf_size = infobuf.size();
+            char len[4];
+            for (int i = 0; i < 4; i++) {
+                len[i] = (char)(buf_size & 0xff);
+                buf_size >>= 8;
+            }
+            data_file->Write(&len[0], 4);
+            data_file->Write(infobuf.data(), infobuf.size());
             result_stream->Next();
         }
+        if (!fs->CloseFile(data_file)) {
+            std::cout << "Close file error" << std::endl;
+            return -1;
+        }
+        delete data_file;
         std::cout << "dump table " << tablename << " successfully" << std::endl;
         delete table;
-        delete coded_out;
-        delete raw_out;
-        data_s.close();
+        delete fs;
     } else if (strcmp(argv[1], "restore") == 0) {
         if (argc != 3) {
             Usage();
             return -1;
         }
-        std::string prefix = "./dump_data/" + tablename + "/";
-        std::string schema_file = prefix + "schema";
+
+        bfs::FS* fs = NULL;
+        if (!bfs::FS::OpenFileSystem("Porsche:8828", &fs)) {
+            std::cout << "Open filesystem fail" << std::endl;
+            return -1;
+        }
+        bfs::File* schema_file_;
+        if (!fs->OpenFile(std::string("/dump_data/" + tablename + "/schema").c_str(),
+                    O_RDONLY, &schema_file_)) {
+            std::cout << "Open schema file fail" << std::endl;
+            return -1;
+        }
+        std::string  schema_info;
+        char schema_buf[1024];
+        while (1) {
+            int len = schema_file_->Read(schema_buf, sizeof(schema_buf));
+            if (len <= 0) {
+                break;
+            }
+            schema_info += std::string(&schema_buf[0], len);
+        }
+        fs->CloseFile(schema_file_);
+        delete schema_file_;
+        schema_file_ = NULL;
+
         TableDescriptor table_desc;
-        if (!ParseTableSchemaFile(schema_file, &table_desc)) {
-            std::cout << "Parse schema error" << std::endl;
-            return -1;
-        }
         std::vector<std::string> delimiters;
-        /*
-        std::string delimiter_file = prefix + "/delimitr";
-        if (!ParseDelimiterFile(delimiter_file, &delimiters)) {
-            std::cout << "Parse delimiter_file error" << std::endl;
-            return -1;
-        }
-        */
+        ParseTableSchema(schema_info, &table_desc);
         if (!client->CreateTable(table_desc, delimiters, &error_code)) {
             std::cout << "Create table error" << std::endl;
             return -1;
         }
-
         //restore records
         Table* table = NULL;
         if ((table = client->OpenTable(tablename, &error_code)) == NULL) {
             std::cout << "Open dest table error" << std::endl;
             return -1;
         }
-        std::fstream data_s(std::string(prefix + "data").c_str(),
-                std::ios::in | std::ios::binary);
-        if (!data_s) {
-            std::cout << "Open binary data error" << std::endl;
+
+        bfs::File* data_file;
+        if (!fs->OpenFile(std::string("/dump_data/" + tablename + "/data").c_str(), O_RDONLY, &data_file)) {
+            std::cout << "Open data file fail" << std::endl;
             return -1;
         }
-        google::protobuf::io::ZeroCopyInputStream *raw_in =
-            new google::protobuf::io::IstreamInputStream(&data_s);
-        google::protobuf::io::CodedInputStream *coded_in =
-            new google::protobuf::io::CodedInputStream(raw_in);
-
-        uint32_t message_size = 0;
-        while (coded_in->ReadVarint32(&message_size)) {
-            std::string message_buf;
-            coded_in->ReadString(&message_buf, message_size);
+        while (1) {
+            long message_size = 0;
+            char len_buf[4];
+            int read_len = data_file->Read(len_buf, 4);
+            if (read_len < 4) {
+                break;
+            }
+            for (int i = 3; i >= 0; i--) {
+                message_size = (message_size << 8) | len_buf[i];
+            }
+            assert(message_size > 0);
+            char* message_buf = new char(message_size);
+            read_len = data_file->Read(message_buf, message_size);
+            assert(read_len == (int32_t)message_size);
             tera::DumpRecord record;
-            record.ParseFromString(message_buf);
+            record.ParseFromArray(message_buf, message_size);
+            delete message_buf;
+            std::cout << record.rowname() << "  " << record.value() << std::endl;
             std::string columnfamily = "";
             std::string qualifier = "";
             if (record.has_columnfamily()) {
@@ -173,12 +222,12 @@ int main(int argc, char* argv[])
                 return -1;
             }
         }
-
+        fs->CloseFile(data_file);
+        delete data_file;
+        data_file = NULL;
         std::cout << "restore table " << tablename << " successfully" << std::endl;
         delete table;
-        delete coded_in;
-        delete raw_in;
-        data_s.close();
+        delete fs;
     } else {
         Usage();
         ret = -1;

@@ -25,6 +25,7 @@ GLOG_INCDIR = $(GLOG_PREFIX)/include
 GTEST_INCDIR = $(GTEST_PREFIX)/include
 GPERFTOOLS_INCDIR = $(GPERFTOOLS_PREFIX)/include
 INS_INCDIR = $(INS_PREFIX)/include
+DFS_INCDIR = ./src/dfs/
 
 SOFA_PBRPC_LIBDIR = $(SOFA_PBRPC_PREFIX)/lib
 PROTOBUF_LIBDIR = $(PROTOBUF_PREFIX)/lib
@@ -35,6 +36,7 @@ GLOG_LIBDIR = $(GLOG_PREFIX)/lib
 GTEST_LIBDIR = $(GTEST_PREFIX)/lib
 GPERFTOOLS_LIBDIR = $(GPERFTOOLS_PREFIX)/lib
 INS_LIBDIR = $(INS_PREFIX)/lib
+DFS_LIBDIR = ./src/dfs/
 
 PROTOC = $(PROTOBUF_PREFIX)/bin/protoc
 
@@ -45,10 +47,11 @@ PROTOC = $(PROTOBUF_PREFIX)/bin/protoc
 DEPS_INCPATH = -I$(SOFA_PBRPC_INCDIR) -I$(PROTOBUF_INCDIR) \
                -I$(SNAPPY_INCDIR) -I$(ZOOKEEPER_INCDIR) \
                -I$(GFLAGS_INCDIR) -I$(GLOG_INCDIR) -I$(GTEST_INCDIR) \
-               -I$(GPERFTOOLS_INCDIR) -I$(BOOST_INCDIR) -I$(INS_INCDIR)
+               -I$(GPERFTOOLS_INCDIR) -I$(BOOST_INCDIR) -I$(INS_INCDIR) \
+			   -I$(DFS_INCDIR)
 DEPS_LDPATH = -L$(SOFA_PBRPC_LIBDIR) -L$(PROTOBUF_LIBDIR) \
               -L$(SNAPPY_LIBDIR) -L$(ZOOKEEPER_LIBDIR) \
               -L$(GFLAGS_LIBDIR) -L$(GLOG_LIBDIR) -L$(GTEST_LIBDIR) \
-              -L$(GPERFTOOLS_LIBDIR) -L$(INS_LIBDIR)
-DEPS_LDFLAGS = -lins_sdk -lsofa-pbrpc -lprotobuf -lsnappy -lzookeeper_mt \
+              -L$(GPERFTOOLS_LIBDIR) -L$(INS_LIBDIR) -L$(DFS_LIBDIR)
+DEPS_LDFLAGS = -lins_sdk -lbfs -lsofa-pbrpc -lprotobuf -lsnappy -lzookeeper_mt \
                -lgtest_main -lgtest -lglog -lgflags -ltcmalloc_minimal
