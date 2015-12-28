@@ -195,7 +195,7 @@ int main(int argc, char* argv[])
             return -1;
         }
         while (1) {
-            long message_size = 0;
+            int32_t message_size = 0;
             char len_buf[4];
             int read_len = data_file->Read(len_buf, 4);
             if (read_len < 4) {
@@ -205,13 +205,13 @@ int main(int argc, char* argv[])
                 message_size = (message_size << 8) | len_buf[i];
             }
             assert(message_size > 0);
-            char* message_buf = new char(message_size);
+            char* message_buf = new char[message_size];
             read_len = data_file->Read(message_buf, message_size);
             assert(read_len == (int32_t)message_size);
             tera::DumpRecord record;
             record.ParseFromArray(message_buf, message_size);
-            delete message_buf;
-            std::cout << record.rowname() << "  " << record.value() << std::endl;
+            delete []message_buf;
+            //std::cout << record.rowname() << "  " << record.value() << std::endl;
             std::string columnfamily = "";
             std::string qualifier = "";
             if (record.has_columnfamily()) {
